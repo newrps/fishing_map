@@ -11,7 +11,7 @@
   export let loading = false;
   export let error: string | null = null;
 
-  const dispatch = createEventDispatcher<{ dateChange: string }>();
+  const dispatch = createEventDispatcher<{ dateChange: string; openMonth: undefined }>();
 
   function ymdToDate(ymd: string): Date {
     return new Date(
@@ -81,6 +81,10 @@
     </div>
     <button class="nav-btn" on:click={() => shiftDate(1)} aria-label="다음">›</button>
   </div>
+
+  <button class="month-trigger" on:click={() => dispatch('openMonth')}>
+    📅 한 달 한눈에 보기
+  </button>
 
   {#if loading}
     <div class="state">로딩 중…</div>
@@ -301,4 +305,21 @@
     font-size: 13px;
   }
   .state.error { color: #d32f2f; }
+
+  .month-trigger {
+    width: 100%;
+    background: linear-gradient(90deg, #003D5C 0%, #0077BE 100%);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 10px;
+    font-family: inherit;
+    transition: filter 0.15s, transform 0.15s;
+  }
+  .month-trigger:hover { filter: brightness(1.1); }
+  .month-trigger:active { transform: scale(0.98); }
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Map from '$lib/components/Map.svelte';
+  import MonthCalendar from '$lib/components/MonthCalendar.svelte';
   import { fetchStations, fetchTide, fetchConditions, regionColor } from '$lib/api';
   import type { Station, TideResponse, Conditions, Region } from '$lib/api';
 
@@ -160,6 +161,19 @@
     const v = REGION_VIEWS[r];
     flyTarget = { ...v, ts: Date.now() };
   }
+
+  // 월간 캘린더 모달
+  let monthOpen = false;
+  function openMonth() { if (selected) monthOpen = true; }
+  function closeMonth() { monthOpen = false; }
+
+  async function pickMonthDate(e: CustomEvent<string>) {
+    const ymd = e.detail;
+    if (!selected) return;
+    monthOpen = false;
+    // handleDateChange와 동일 흐름 재사용
+    await handleDateChange(new CustomEvent('dateChange', { detail: ymd }));
+  }
 </script>
 
 <!-- 풀스크린 맵 -->
@@ -175,7 +189,18 @@
     error={tideError}
     on:select={handleSelect}
     on:dateChange={handleDateChange}
+    on:openMonth={openMonth}
   />
+
+  {#if monthOpen && selected}
+    <MonthCalendar
+      station={selected}
+      {selectedDate}
+      {ensureTide}
+      on:close={closeMonth}
+      on:pick={pickMonthDate}
+    />
+  {/if}
 
   <!-- 좌상단 브랜드 + 필터 오버레이 -->
   <div class="overlay top-left">

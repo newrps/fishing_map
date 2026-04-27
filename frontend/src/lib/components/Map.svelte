@@ -17,6 +17,7 @@
   const dispatch = createEventDispatcher<{
     select: Station;
     dateChange: string;
+    openMonth: undefined;
   }>();
 
   let mapEl: HTMLDivElement;
@@ -189,6 +190,9 @@
     // 팝업 내에서 dateChange 이벤트 → 부모로 전파
     popupComponent.$on('dateChange', (e: CustomEvent<string>) => {
       dispatch('dateChange', e.detail);
+    });
+    popupComponent.$on('openMonth', () => {
+      dispatch('openMonth');
     });
 
     // Leaflet 팝업 열기
