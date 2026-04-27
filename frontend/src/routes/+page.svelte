@@ -12,11 +12,44 @@
   let tideError: string | null = null;
   let loadStationsError: string | null = null;
 
+  // 관측소 + 날짜별 물때 캐시 — key: `${code}:${ymd}`
+  let tideCache: Record<string, TideResponse> = {};
+  // 선택 시 미리 가져올 날짜 윈도우 (오늘 기준 -2..+7)
+  const PREFETCH_RANGE = [-2, -1, 1, 2, 3, 4, 5, 6, 7];
+
   function todayYMD(): string {
     const d = new Date();
     return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   }
+  function ymdToDate(ymd: string): Date {
+    return new Date(
+      parseInt(ymd.slice(0, 4)),
+      parseInt(ymd.slice(4, 6)) - 1,
+      parseInt(ymd.slice(6, 8))
+    );
+  }
+  function dateToYmd(d: Date): string {
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  }
   let selectedDate: string = todayYMD();
+
+  function prefetchAround(code: string, centerYmd: string) {
+    const center = ymdToDate(centerYmd);
+    for (const offset of PREFETCH_RANGE) {
+      const d = new Date(center);
+      d.setDate(d.getDate() + offset);
+      const ymd = dateToYmd(d);
+      const key = `${code}:${ymd}`;
+      if (tideCache[key]) continue;
+      fetchTide(code, ymd)
+        .then((t) => {
+          // 다른 관측소로 바뀌었으면 결과 폐기
+          if (selected?.code !== code) return;
+          tideCache = { ...tideCache, [key]: t };
+        })
+        .catch(() => {/* silent — 미리 가져오기 실패는 무시 */});
+    }
+  }
 
   // 지역별 카메라 좌표 (각 해역의 중앙 + 적절한 줌)
   const REGION_VIEWS: Record<Region, { lat: number; lon: number; zoom: number }> = {
@@ -42,32 +75,59 @@
     conditions = null;
     tideError = null;
     loadingTide = true;
+    tideCache = {};  // 관측소 바뀌면 캐시 초기화
+
+    const code = selected.code;
     try {
       const [t, c] = await Promise.allSettled([
-        fetchTide(selected.code, selectedDate),
-        fetchConditions(selected.code)
+        fetchTide(code, selectedDate),
+        fetchConditions(code)
       ]);
-      if (t.status === 'fulfilled') tide = t.value;
-      else tideError = t.reason?.message ?? String(t.reason);
+      if (selected?.code !== code) return; // 빠른 재선택 보호
+      if (t.status === 'fulfilled') {
+        tide = t.value;
+        tideCache = { ...tideCache, [`${code}:${selectedDate}`]: t.value };
+      } else {
+        tideError = t.reason?.message ?? String(t.reason);
+      }
       if (c.status === 'fulfilled') conditions = c.value;
     } finally {
       loadingTide = false;
     }
+
+    // 선택 후 주변 날짜 백그라운드 프리페치
+    prefetchAround(code, selectedDate);
   }
 
   async function handleDateChange(e: CustomEvent<string>) {
     selectedDate = e.detail;
     if (!selected) return;
+    const code = selected.code;
+    const key = `${code}:${selectedDate}`;
+
+    // 캐시 히트 — 즉시 표시, 로딩 없음
+    if (tideCache[key]) {
+      tide = tideCache[key];
+      tideError = null;
+      prefetchAround(code, selectedDate); // 새 중심 기준 추가 프리페치
+      return;
+    }
+
+    // 캐시 미스 — 직접 가져오기
     tide = null;
     tideError = null;
     loadingTide = true;
     try {
-      tide = await fetchTide(selected.code, selectedDate);
+      const t = await fetchTide(code, selectedDate);
+      if (selected?.code !== code) return;
+      tide = t;
+      tideCache = { ...tideCache, [key]: t };
     } catch (err: any) {
       tideError = err.message ?? String(err);
     } finally {
       loadingTide = false;
     }
+    prefetchAround(code, selectedDate);
   }
 
   function flyToRegion(r: Region) {
@@ -106,7 +166,7 @@
         <path d="M4 28 Q10 24 16 28 T28 28 T40 28 V40 H4 Z" fill="#fff" opacity="0.4" />
         <circle cx="29" cy="13" r="3.5" fill="#FFE082" />
       </svg>
-      <h1>물때지도</h1>
+      <h1>Ps물때지도</h1>
     </div>
     <div class="region-jump">
       {#each REGIONS as r}
