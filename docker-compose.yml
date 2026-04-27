@@ -1,0 +1,42 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: fishing-map-backend
+    restart: unless-stopped
+    environment:
+      KHOA_SERVICE_KEY: ${KHOA_SERVICE_KEY}
+      PORT: 8765
+      RUST_LOG: ${RUST_LOG:-info}
+    expose:
+      - "8765"
+    # 개발 시 dev 서버에서 직접 호출하기 위해 host에도 노출
+    ports:
+      - "127.0.0.1:8765:8765"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8765/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - fishing-map
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_VWORLD_KEY: ${VITE_VWORLD_KEY}
+    container_name: fishing-map-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${HOST_PORT:-8080}:80"
+    networks:
+      - fishing-map
+
+networks:
+  fishing-map:
+    driver: bridge

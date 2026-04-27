@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Map from '$lib/components/Map.svelte';
-  import TidePanel from '$lib/components/TidePanel.svelte';
   import { fetchStations, fetchTide, fetchConditions, regionColor } from '$lib/api';
   import type { Station, TideResponse, Conditions, Region } from '$lib/api';
 
@@ -13,10 +12,21 @@
   let tideError: string | null = null;
   let loadStationsError: string | null = null;
 
-  const REGIONS: Region[] = ['서해', '남해', '동해', '제주'];
-  let regionFilter: Set<Region> = new Set(REGIONS);
+  function todayYMD(): string {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  }
+  let selectedDate: string = todayYMD();
 
-  $: filteredStations = stations.filter((s) => regionFilter.has(s.region));
+  // 지역별 카메라 좌표 (각 해역의 중앙 + 적절한 줌)
+  const REGION_VIEWS: Record<Region, { lat: number; lon: number; zoom: number }> = {
+    '서해': { lat: 36.5, lon: 126.2, zoom: 7 },
+    '남해': { lat: 34.7, lon: 127.8, zoom: 8 },
+    '동해': { lat: 37.5, lon: 129.5, zoom: 7 },
+    '제주': { lat: 33.4, lon: 126.5, zoom: 9 }
+  };
+  const REGIONS: Region[] = ['서해', '남해', '동해', '제주'];
+  let flyTarget: { lat: number; lon: number; zoom: number; ts: number } | null = null;
 
   onMount(async () => {
     try {
@@ -33,213 +43,222 @@
     tideError = null;
     loadingTide = true;
     try {
-      // 물때와 날씨/수온 병렬 호출
       const [t, c] = await Promise.allSettled([
-        fetchTide(selected.code),
+        fetchTide(selected.code, selectedDate),
         fetchConditions(selected.code)
       ]);
       if (t.status === 'fulfilled') tide = t.value;
       else tideError = t.reason?.message ?? String(t.reason);
       if (c.status === 'fulfilled') conditions = c.value;
-      // conditions 실패는 silent (날씨 없어도 물때는 보여줘야 함)
     } finally {
       loadingTide = false;
     }
   }
 
-  function toggleRegion(r: Region) {
-    if (regionFilter.has(r)) regionFilter.delete(r);
-    else regionFilter.add(r);
-    regionFilter = new Set(regionFilter); // trigger reactivity
+  async function handleDateChange(e: CustomEvent<string>) {
+    selectedDate = e.detail;
+    if (!selected) return;
+    tide = null;
+    tideError = null;
+    loadingTide = true;
+    try {
+      tide = await fetchTide(selected.code, selectedDate);
+    } catch (err: any) {
+      tideError = err.message ?? String(err);
+    } finally {
+      loadingTide = false;
+    }
+  }
+
+  function flyToRegion(r: Region) {
+    const v = REGION_VIEWS[r];
+    flyTarget = { ...v, ts: Date.now() };
   }
 </script>
 
-<div class="layout">
-  <aside class="sidebar">
-    <header class="brand">
-      <div class="logo">
-        <svg viewBox="0 0 40 40" class="logo-icon" aria-hidden="true">
-          <defs>
-            <linearGradient id="seaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#4FC3F7" />
-              <stop offset="100%" stop-color="#0277BD" />
-            </linearGradient>
-          </defs>
-          <circle cx="20" cy="20" r="19" fill="url(#seaGrad)" />
-          <path
-            d="M4 24 Q10 20 16 24 T28 24 T40 24 V40 H4 Z"
-            fill="#fff"
-            opacity="0.25"
-          />
-          <path
-            d="M4 28 Q10 24 16 28 T28 28 T40 28 V40 H4 Z"
-            fill="#fff"
-            opacity="0.4"
-          />
-          <circle cx="29" cy="13" r="3.5" fill="#FFE082" />
-        </svg>
-        <h1>물때지도</h1>
-      </div>
-      <p>전국 조위관측소 실시간 만조·간조</p>
-    </header>
+<!-- 풀스크린 맵 -->
+<main class="full-map">
+  <Map
+    {stations}
+    {selected}
+    {tide}
+    {conditions}
+    {selectedDate}
+    {flyTarget}
+    loading={loadingTide}
+    error={tideError}
+    on:select={handleSelect}
+    on:dateChange={handleDateChange}
+  />
 
-    <div class="filter">
-      <span class="filter-label">지역 필터</span>
-      <div class="filter-chips">
-        {#each REGIONS as r}
-          <button
-            class="chip"
-            class:active={regionFilter.has(r)}
-            style="--c: {regionColor(r)}"
-            on:click={() => toggleRegion(r)}
-          >
-            <span class="dot" style="background: {regionColor(r)}"></span>
-            {r}
-          </button>
-        {/each}
-      </div>
+  <!-- 좌상단 브랜드 + 필터 오버레이 -->
+  <div class="overlay top-left">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" class="logo-icon" aria-hidden="true">
+        <defs>
+          <linearGradient id="seaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#4FC3F7" />
+            <stop offset="100%" stop-color="#0277BD" />
+          </linearGradient>
+        </defs>
+        <circle cx="20" cy="20" r="19" fill="url(#seaGrad)" />
+        <path d="M4 24 Q10 20 16 24 T28 24 T40 24 V40 H4 Z" fill="#fff" opacity="0.25" />
+        <path d="M4 28 Q10 24 16 28 T28 28 T40 28 V40 H4 Z" fill="#fff" opacity="0.4" />
+        <circle cx="29" cy="13" r="3.5" fill="#FFE082" />
+      </svg>
+      <h1>물때지도</h1>
     </div>
+    <div class="region-jump">
+      {#each REGIONS as r}
+        <button
+          class="jump-btn"
+          style="--c: {regionColor(r)}"
+          on:click={() => flyToRegion(r)}
+          title="{r}로 이동"
+        >
+          <span class="dot" style="background: {regionColor(r)}"></span>
+          {r}
+        </button>
+      {/each}
+    </div>
+  </div>
 
-    {#if loadStationsError}
-      <div class="error-banner">⚠️ 관측소 목록 로드 실패: {loadStationsError}</div>
-    {/if}
+  {#if loadStationsError}
+    <div class="overlay bottom-center error-banner">
+      ⚠️ 관측소 목록 로드 실패: {loadStationsError}
+    </div>
+  {/if}
 
-    <TidePanel
-      station={selected}
-      {tide}
-      {conditions}
-      loading={loadingTide}
-      error={tideError}
-    />
-
-    <footer>
-      <small>
-        조위 데이터: 국립해양조사원 OpenAPI<br>
-        지도: OpenStreetMap · CartoDB · OpenSeaMap
-      </small>
-    </footer>
-  </aside>
-
-  <main class="map-area">
-    <Map stations={filteredStations} {selected} on:select={handleSelect} />
-  </main>
-</div>
+  <!-- 우하단 안내 -->
+  <div class="overlay bottom-right hint-card">
+    <small>마커 클릭 → 물때·날씨·수온</small>
+  </div>
+</main>
 
 <style>
-  .layout {
-    display: grid;
-    grid-template-columns: 380px 1fr;
-    height: 100vh;
-    gap: 0;
+  .full-map {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+  /* Map의 .map div가 부모 100%를 채우도록 */
+  :global(.full-map > .map) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
   }
 
-  .sidebar {
-    background: linear-gradient(180deg, #f4f7fa 0%, #e8eef3 100%);
-    padding: 20px 18px;
-    overflow-y: auto;
+  .overlay {
+    position: absolute;
+    z-index: 500;
+    pointer-events: none;
+  }
+  .overlay > * { pointer-events: auto; }
+
+  .top-left {
+    top: 16px;
+    left: 16px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    border-right: 1px solid #d8e0e6;
+    gap: 10px;
   }
 
-  .brand .logo {
+  .brand {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 8px 14px;
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 4px;
+    box-shadow: 0 2px 12px rgba(0, 61, 92, 0.15);
   }
-  .brand .logo-icon {
-    width: 36px;
-    height: 36px;
-    filter: drop-shadow(0 2px 4px rgba(2, 119, 189, 0.25));
+  .logo-icon {
+    width: 32px;
+    height: 32px;
   }
-  .sidebar header h1 {
-    font-size: 24px;
+  .brand h1 {
     margin: 0;
+    font-size: 18px;
     color: #003D5C;
     font-weight: 700;
     letter-spacing: -0.5px;
   }
-  .sidebar header p {
-    margin: 0;
-    color: #6b7c8a;
-    font-size: 13px;
-  }
 
-  .filter {
-    background: #fff;
-    border-radius: 12px;
-    padding: 14px;
-    box-shadow: 0 2px 8px rgba(0, 61, 92, 0.06);
-  }
-  .filter-label {
-    display: block;
-    font-size: 12px;
-    color: #6b7c8a;
-    margin-bottom: 8px;
-  }
-  .filter-chips {
+  .region-jump {
     display: flex;
-    flex-wrap: wrap;
     gap: 6px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 6px;
+    box-shadow: 0 2px 12px rgba(0, 61, 92, 0.12);
+    flex-wrap: wrap;
   }
-  .chip {
-    background: #f0f4f7;
+  .jump-btn {
+    background: transparent;
     border: 1.5px solid transparent;
     border-radius: 14px;
-    padding: 5px 10px;
+    padding: 5px 12px;
     font-size: 13px;
-    color: #6b7c8a;
+    color: #003D5C;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 6px;
     transition: all 0.15s;
-  }
-  .chip.active {
-    background: #fff;
-    border-color: var(--c);
-    color: #003D5C;
+    font-family: inherit;
     font-weight: 500;
   }
-  .chip .dot {
+  .jump-btn:hover {
+    background: rgba(0, 61, 92, 0.08);
+    border-color: var(--c);
+  }
+  .jump-btn:active {
+    transform: scale(0.96);
+  }
+  .jump-btn .dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     display: inline-block;
   }
 
+  .bottom-right {
+    bottom: 16px;
+    right: 16px;
+  }
+  .hint-card {
+    background: rgba(0, 61, 92, 0.85);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 14px;
+    font-size: 11px;
+  }
+
+  .bottom-center {
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
   .error-banner {
     background: #ffebee;
-    border-left: 3px solid #d32f2f;
     color: #b71c1c;
-    padding: 10px 12px;
-    border-radius: 6px;
+    border-left: 3px solid #d32f2f;
+    padding: 10px 16px;
+    border-radius: 8px;
     font-size: 13px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   }
 
-  footer {
-    margin-top: auto;
-    padding-top: 12px;
-    color: #95a3ad;
-    line-height: 1.5;
-  }
-
-  .map-area { position: relative; }
-
-  @media (max-width: 768px) {
-    .layout {
-      grid-template-columns: 1fr;
-      grid-template-rows: 1fr auto;
+  @media (max-width: 480px) {
+    .top-left {
+      top: 8px;
+      left: 8px;
+      right: 8px;
     }
-    .sidebar {
-      grid-row: 2;
-      max-height: 50vh;
-    }
-    .map-area {
-      grid-row: 1;
-      min-height: 50vh;
-    }
+    .brand h1 { font-size: 16px; }
+    .region-jump { font-size: 11px; }
   }
 </style>
