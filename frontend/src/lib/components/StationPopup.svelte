@@ -87,9 +87,12 @@
   {:else if error}
     <div class="state error">⚠️ {error}</div>
   {:else}
-    <!-- 현재 날씨/수온 (오늘일 때만 의미 있음) -->
-    {#if conditions && isToday(selectedDate)}
+    <!-- 현재 날씨/수온 (실시간 - 항상 표시) -->
+    {#if conditions}
       <div class="now">
+        {#if !isToday(selectedDate)}
+          <div class="live-tag">🟢 현재 (실시간)</div>
+        {/if}
         <div class="now-cell">
           <span class="emo">{conditions.weather_emoji}</span>
           <div>
@@ -238,6 +241,16 @@
     background: rgba(255,255,255,0.7);
     border-radius: 8px;
     padding: 6px 8px;
+  }
+  .live-tag {
+    grid-column: 1 / -1;
+    font-size: 10px;
+    color: #2E7D32;
+    font-weight: 600;
+    text-align: center;
+    background: rgba(255,255,255,0.6);
+    padding: 3px 8px;
+    border-radius: 6px;
   }
   .now-cell .emo { font-size: 22px; line-height: 1; }
   .big { font-size: 17px; font-weight: 600; color: #003D5C; line-height: 1; }

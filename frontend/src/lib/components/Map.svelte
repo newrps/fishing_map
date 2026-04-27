@@ -34,7 +34,7 @@
     map = L.map(mapEl, {
       center: [36.0, 127.8],
       zoom: 7,
-      zoomControl: true,
+      zoomControl: false,
       attributionControl: true
     });
 
@@ -190,13 +190,16 @@
     });
 
     // Leaflet 팝업 열기
+    // autoPanPaddingTopLeft: 좌상단 오버레이(브랜드+지역버튼, ≈150px)와 겹치지 않게 마진
     leafletPopup = L.popup({
       closeButton: true,
       autoClose: false,
       closeOnClick: false,
       maxWidth: 360,
       minWidth: 320,
-      className: 'station-popup'
+      className: 'station-popup',
+      autoPanPaddingTopLeft: [16, 170],
+      autoPanPaddingBottomRight: [16, 60]
     })
       .setLatLng([station.lat, station.lon])
       .setContent(popupEl)
