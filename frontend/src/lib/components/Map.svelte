@@ -155,9 +155,11 @@
   }
 
   async function handleSelectionChange(station: Station) {
-    map.flyTo([station.lat, station.lon], Math.max(map.getZoom(), 10), {
-      duration: 0.6
-    });
+    // 팝업은 마커 위쪽으로 열리므로, 마커를 화면 하단으로 보내 팝업 공간 확보
+    const targetZoom = Math.max(map.getZoom(), 10);
+    const markerPx = map.project([station.lat, station.lon], targetZoom);
+    const offsetCenter = map.unproject(markerPx.subtract([0, 160]), targetZoom);
+    map.flyTo(offsetCenter, targetZoom, { duration: 0.6 });
 
     // 마커 강조
     Object.entries(markersByCode).forEach(([code, m]: [string, any]) => {
