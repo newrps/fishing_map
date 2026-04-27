@@ -14,8 +14,15 @@
 
   // 관측소 + 날짜별 물때 캐시 — key: `${code}:${ymd}`
   let tideCache: Record<string, TideResponse> = {};
-  // 선택 시 미리 가져올 날짜 윈도우 (오늘 기준 -2..+7)
-  const PREFETCH_RANGE = [-2, -1, 1, 2, 3, 4, 5, 6, 7];
+  // 진행 중인 페치 (중복 요청 방지)
+  let tideInflight: Record<string, Promise<TideResponse>> = {};
+
+  // 처음 선택 시 — 양쪽으로 적당히
+  const WINDOW_NEUTRAL = [-3, -2, -1, 1, 2, 3, 4, 5, 6, 7];
+  // ›로 미래 이동 중 — 앞으로 길게
+  const WINDOW_FORWARD = [-1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  // ‹로 과거 이동 중 — 뒤로 길게
+  const WINDOW_BACKWARD = [-11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 1];
 
   function todayYMD(): string {
     const d = new Date();
@@ -33,21 +40,36 @@
   }
   let selectedDate: string = todayYMD();
 
-  function prefetchAround(code: string, centerYmd: string) {
+  // 캐시 히트면 즉시 resolve, 진행 중이면 그 promise, 없으면 새로 페치
+  function ensureTide(code: string, ymd: string): Promise<TideResponse> {
+    const key = `${code}:${ymd}`;
+    if (tideCache[key]) return Promise.resolve(tideCache[key]);
+    if (tideInflight[key]) return tideInflight[key];
+    const p = fetchTide(code, ymd)
+      .then((t) => {
+        if (selected?.code === code) {
+          tideCache = { ...tideCache, [key]: t };
+        }
+        return t;
+      })
+      .finally(() => {
+        delete tideInflight[key];
+      });
+    tideInflight[key] = p;
+    return p;
+  }
+
+  // direction: -1=과거, +1=미래, 0=양방향
+  function prefetchAround(code: string, centerYmd: string, direction = 0) {
+    const offsets =
+      direction > 0 ? WINDOW_FORWARD :
+      direction < 0 ? WINDOW_BACKWARD :
+      WINDOW_NEUTRAL;
     const center = ymdToDate(centerYmd);
-    for (const offset of PREFETCH_RANGE) {
+    for (const offset of offsets) {
       const d = new Date(center);
       d.setDate(d.getDate() + offset);
-      const ymd = dateToYmd(d);
-      const key = `${code}:${ymd}`;
-      if (tideCache[key]) continue;
-      fetchTide(code, ymd)
-        .then((t) => {
-          // 다른 관측소로 바뀌었으면 결과 폐기
-          if (selected?.code !== code) return;
-          tideCache = { ...tideCache, [key]: t };
-        })
-        .catch(() => {/* silent — 미리 가져오기 실패는 무시 */});
+      ensureTide(code, dateToYmd(d)).catch(() => {/* silent */});
     }
   }
 
@@ -100,34 +122,38 @@
   }
 
   async function handleDateChange(e: CustomEvent<string>) {
-    selectedDate = e.detail;
-    if (!selected) return;
+    if (!selected) {
+      selectedDate = e.detail;
+      return;
+    }
     const code = selected.code;
+    const oldDate = selectedDate;
+    selectedDate = e.detail;
+    const direction = selectedDate > oldDate ? 1 : selectedDate < oldDate ? -1 : 0;
     const key = `${code}:${selectedDate}`;
 
     // 캐시 히트 — 즉시 표시, 로딩 없음
     if (tideCache[key]) {
       tide = tideCache[key];
       tideError = null;
-      prefetchAround(code, selectedDate); // 새 중심 기준 추가 프리페치
+      prefetchAround(code, selectedDate, direction);
       return;
     }
 
-    // 캐시 미스 — 직접 가져오기
+    // 캐시 미스(혹은 prefetch 진행 중) — 진행 중인 promise를 기다리거나 새로 페치
     tide = null;
     tideError = null;
     loadingTide = true;
     try {
-      const t = await fetchTide(code, selectedDate);
-      if (selected?.code !== code) return;
+      const t = await ensureTide(code, selectedDate);
+      if (selected?.code !== code || selectedDate !== e.detail) return;
       tide = t;
-      tideCache = { ...tideCache, [key]: t };
     } catch (err: any) {
       tideError = err.message ?? String(err);
     } finally {
       loadingTide = false;
     }
-    prefetchAround(code, selectedDate);
+    prefetchAround(code, selectedDate, direction);
   }
 
   function flyToRegion(r: Region) {
