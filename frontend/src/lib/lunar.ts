@@ -1,11 +1,14 @@
 // 양력 → 음력 변환 (Intl.DateTimeFormat의 chinese 캘린더 활용)
 // 한국 음력은 중국 음력과 동일한 계산 방식이라 그대로 사용 가능.
 
+import type { Region } from './api';
+
 export interface LunarInfo {
   day: number;             // 음력 1~30
   mul: string;             // "1물"~"13물" | "조금" | "무시"
   isFishingPrime: boolean; // 사리(큰물) = 6,7,8물
   badgeColor: string;      // tier별 색상
+  region?: Region;
 }
 
 const lunarFmt = new Intl.DateTimeFormat('en-u-ca-chinese', { day: 'numeric' });
@@ -16,8 +19,7 @@ export function lunarDay(date: Date): number {
   return dayPart ? parseInt(dayPart.value, 10) : 0;
 }
 
-// 14물때식 (서해 표준) — 음력 1일을 7물로 시작
-// 음 1=7물, 음 2=8물(한사리), …, 음 8=조금, 음 9=무시, …, 음 15=6물
+// 14물때식 (서해 표준 기준 테이블) — 음력 1일을 7물로 시작
 type Tier = 'sari' | 'shoulder' | 'jogeum' | 'mushi' | 'normal';
 
 const MUL_TABLE: ReadonlyArray<{ mul: string; tier: Tier }> = [
@@ -39,27 +41,39 @@ const MUL_TABLE: ReadonlyArray<{ mul: string; tier: Tier }> = [
 ];
 
 const TIER_COLOR: Record<Tier, string> = {
-  sari:     '#E53935', // 빨강 — 큰물(사리)
-  shoulder: '#FB8C00', // 주황 — 사리 어깨
-  jogeum:   '#1E88E5', // 파랑 — 조금
-  mushi:    '#64B5F6', // 연파랑 — 무시
-  normal:   '#9E9E9E', // 회색 — 일반
+  sari:     '#E53935',
+  shoulder: '#FB8C00',
+  jogeum:   '#1E88E5',
+  mushi:    '#64B5F6',
+  normal:   '#9E9E9E',
 };
 
-export function tideClass(lunarD: number): LunarInfo {
+// 지역별 시프트 (음력일 기준 days)
+// 남해/제주는 서해보다 같은 음력일에 1단계 빠른(시프트 +1) 물때 표기
+//  (동일 mul 라벨이 서해보다 1일 늦게 등장)
+const REGION_SHIFT: Record<Region, number> = {
+  '서해': 0,
+  '남해': 1,
+  '제주': 1,
+  '동해': 0, // 조차 작음 — 형식상 서해 표준 적용
+};
+
+export function tideClass(lunarD: number, region: Region = '서해'): LunarInfo {
   if (!lunarD) {
-    return { day: 0, mul: '', isFishingPrime: false, badgeColor: '' };
+    return { day: 0, mul: '', isFishingPrime: false, badgeColor: '', region };
   }
-  const idx = (lunarD - 1) % 15;
+  const shift = REGION_SHIFT[region] ?? 0;
+  const idx = ((lunarD - 1 - shift) % 15 + 15) % 15;
   const m = MUL_TABLE[idx];
   return {
     day: lunarD,
     mul: m.mul,
     isFishingPrime: m.tier === 'sari',
     badgeColor: TIER_COLOR[m.tier],
+    region,
   };
 }
 
-export function getLunarInfo(date: Date): LunarInfo {
-  return tideClass(lunarDay(date));
+export function getLunarInfo(date: Date, region: Region = '서해'): LunarInfo {
+  return tideClass(lunarDay(date), region);
 }

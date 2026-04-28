@@ -36,7 +36,7 @@
   }
 
   $: dateObj = ymdToDate(selectedDate);
-  $: lunar = getLunarInfo(dateObj);
+  $: lunar = getLunarInfo(dateObj, station.region);
   $: dateLabel = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${['일','월','화','수','목','금','토'][dateObj.getDay()]})`;
   $: seaPartingSpot = findSeaPartingSpot(station.code);
   $: lowestLow = (tide?.events ?? [])

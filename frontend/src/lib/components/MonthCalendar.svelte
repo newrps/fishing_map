@@ -169,7 +169,7 @@
   <div class="grid">
     {#each cells as cell}
       {@const ll = cell.tide ? lowestLow(cell.tide.events) : null}
-      {@const lun = tideClass(lunarDay(cell.date))}
+      {@const lun = tideClass(lunarDay(cell.date), station.region)}
       {@const isToday = cell.ymd === today}
       {@const isSelected = cell.ymd === selectedDate}
       {@const dow = cell.date.getDay()}
@@ -218,7 +218,15 @@
     <span><i style="background:#FB8C00"></i>어깨(3·4·5·9물)</span>
     <span><i style="background:#1E88E5"></i>조금</span>
     <span><i style="background:#64B5F6"></i>무시</span>
-    <span class="hint">셀 클릭 → 해당 날짜로 이동</span>
+    <span class="region-note">
+      {#if station.region === '남해' || station.region === '제주'}
+        ※ {station.region} 표기 (서해 -1일)
+      {:else if station.region === '동해'}
+        ※ 동해 조차 작음 — 참고용
+      {:else}
+        ※ 서해 14물때식
+      {/if}
+    </span>
   </footer>
 </div>
 
@@ -435,6 +443,12 @@
     margin-left: auto;
     color: #888;
     font-size: 10px;
+  }
+  footer .region-note {
+    margin-left: auto;
+    color: #555;
+    font-size: 10px;
+    font-weight: 600;
   }
 
   @media (max-width: 600px) {
