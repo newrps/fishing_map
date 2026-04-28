@@ -2,62 +2,61 @@
 // 한국 음력은 중국 음력과 동일한 계산 방식이라 그대로 사용 가능.
 
 export interface LunarInfo {
-  day: number;          // 음력 1~30
-  label: string;        // "사리" | "조금" | "1물" ~ "8물" | ""
-  isFishingPrime: boolean; // 사리 = 낚시 좋은 시기
-  badgeColor: string;
+  day: number;             // 음력 1~30
+  mul: string;             // "1물"~"13물" | "조금" | "무시"
+  isFishingPrime: boolean; // 사리(큰물) = 6,7,8물
+  badgeColor: string;      // tier별 색상
 }
 
 const lunarFmt = new Intl.DateTimeFormat('en-u-ca-chinese', { day: 'numeric' });
 
 export function lunarDay(date: Date): number {
-  // chinese calendar는 1~30 숫자로 음력일 반환
   const parts = lunarFmt.formatToParts(date);
   const dayPart = parts.find((p) => p.type === 'day');
   return dayPart ? parseInt(dayPart.value, 10) : 0;
 }
 
-// 8물때식 (서해/한국 표준)
-// 음력 1,16 = 7물 / 음력 2,17 = 8물(대사리) / 음력 8,23 = 조금 / 음력 9,24 = 무시
-// 사리 = 보름·그믐 전후 (대조), 조금 = 사리 반대편 (소조)
+// 14물때식 (서해 표준) — 음력 1일을 7물로 시작
+// 음 1=7물, 음 2=8물(한사리), …, 음 8=조금, 음 9=무시, …, 음 15=6물
+type Tier = 'sari' | 'shoulder' | 'jogeum' | 'mushi' | 'normal';
+
+const MUL_TABLE: ReadonlyArray<{ mul: string; tier: Tier }> = [
+  { mul: '7물',  tier: 'sari' },     // 음 1, 16
+  { mul: '8물',  tier: 'sari' },     // 음 2, 17  ← 한사리(정점)
+  { mul: '9물',  tier: 'shoulder' }, // 음 3, 18
+  { mul: '10물', tier: 'normal' },   // 음 4, 19
+  { mul: '11물', tier: 'normal' },   // 음 5, 20
+  { mul: '12물', tier: 'normal' },   // 음 6, 21
+  { mul: '13물', tier: 'normal' },   // 음 7, 22
+  { mul: '조금', tier: 'jogeum' },   // 음 8, 23
+  { mul: '무시', tier: 'mushi' },    // 음 9, 24
+  { mul: '1물',  tier: 'normal' },   // 음 10, 25
+  { mul: '2물',  tier: 'normal' },   // 음 11, 26
+  { mul: '3물',  tier: 'normal' },   // 음 12, 27
+  { mul: '4물',  tier: 'shoulder' }, // 음 13, 28
+  { mul: '5물',  tier: 'shoulder' }, // 음 14, 29
+  { mul: '6물',  tier: 'sari' },     // 음 15, 30
+];
+
+const TIER_COLOR: Record<Tier, string> = {
+  sari:     '#E53935', // 빨강 — 큰물(사리)
+  shoulder: '#FB8C00', // 주황 — 사리 어깨
+  jogeum:   '#1E88E5', // 파랑 — 조금
+  mushi:    '#64B5F6', // 연파랑 — 무시
+  normal:   '#9E9E9E', // 회색 — 일반
+};
+
 export function tideClass(lunarD: number): LunarInfo {
-  // 음력 30일이 없는 달이면 lunarD == 0; 안전하게 처리
   if (!lunarD) {
-    return { day: 0, label: '', isFishingPrime: false, badgeColor: '' };
+    return { day: 0, mul: '', isFishingPrime: false, badgeColor: '' };
   }
-
-  // 보름·그믐 전후 (사리 대조 5일 윈도우)
-  const isSari =
-    [29, 30, 1, 2, 3, 14, 15, 16, 17, 18].includes(lunarD);
-  // 상현·하현 전후 (조금 소조 4일 윈도우)
-  const isJogeum = [7, 8, 9, 10, 22, 23, 24, 25].includes(lunarD);
-
-  let label = '';
-  let badgeColor = '';
-  if (isSari) {
-    // 사리 정점 (음력 1, 2, 16, 17)은 강조
-    if ([1, 2, 16, 17].includes(lunarD)) {
-      label = '사리';
-      badgeColor = '#E53935'; // 빨강 - 대조
-    } else {
-      label = '큰사리';
-      badgeColor = '#FB8C00'; // 주황
-    }
-  } else if (isJogeum) {
-    if ([8, 23].includes(lunarD)) {
-      label = '조금';
-      badgeColor = '#1E88E5'; // 파랑 - 소조
-    } else {
-      label = '소조';
-      badgeColor = '#64B5F6'; // 연파랑
-    }
-  }
-
+  const idx = (lunarD - 1) % 15;
+  const m = MUL_TABLE[idx];
   return {
     day: lunarD,
-    label,
-    isFishingPrime: isSari,
-    badgeColor
+    mul: m.mul,
+    isFishingPrime: m.tier === 'sari',
+    badgeColor: TIER_COLOR[m.tier],
   };
 }
 

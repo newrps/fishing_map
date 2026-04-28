@@ -193,8 +193,8 @@
         </div>
         {#if cell.inMonth}
           <div class="phase-row">
-            {#if lun.label}
-              <span class="phase-badge">{lun.label}</span>
+            {#if lun.mul}
+              <span class="phase-badge">{lun.mul}</span>
             {/if}
             {#if cell.conditions?.weather_emoji}
               <span class="wx-emoji" title={cell.conditions.weather_label}>{cell.conditions.weather_emoji}</span>
@@ -214,10 +214,10 @@
   </div>
 
   <footer class="legend">
-    <span><i style="background:#E53935"></i>사리</span>
-    <span><i style="background:#FB8C00"></i>큰사리</span>
+    <span><i style="background:#E53935"></i>사리(6·7·8물)</span>
+    <span><i style="background:#FB8C00"></i>어깨(3·4·5·9물)</span>
     <span><i style="background:#1E88E5"></i>조금</span>
-    <span><i style="background:#64B5F6"></i>소조</span>
+    <span><i style="background:#64B5F6"></i>무시</span>
     <span class="hint">셀 클릭 → 해당 날짜로 이동</span>
   </footer>
 </div>

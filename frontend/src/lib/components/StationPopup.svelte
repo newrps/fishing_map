@@ -73,8 +73,8 @@
       </div>
       <div class="lunar-info">
         음력 {lunar.day}일
-        {#if lunar.label}
-          <span class="badge" style="background: {lunar.badgeColor}">{lunar.label}</span>
+        {#if lunar.mul}
+          <span class="badge" style="background: {lunar.badgeColor}">{lunar.mul}</span>
         {/if}
       </div>
     </div>
