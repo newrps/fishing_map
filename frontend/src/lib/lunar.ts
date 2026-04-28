@@ -1,15 +1,18 @@
-// 양력 → 음력 변환 (Intl.DateTimeFormat의 chinese 캘린더 활용)
-// 한국 음력은 중국 음력과 동일한 계산 방식이라 그대로 사용 가능.
+// 양력 → 음력 변환 + 한국 물때 시스템(7물때식/8물때식) 표기
+// 출처 비교: 바다타임 물때표 가이드 (https://www.badatime.com/faq.jsp)
 
 import type { Region } from './api';
 
 export interface LunarInfo {
   day: number;             // 음력 1~30
-  mul: string;             // "1물"~"13물" | "조금" | "무시"
-  isFishingPrime: boolean; // 사리(큰물) = 6,7,8물
-  badgeColor: string;      // tier별 색상
-  region?: Region;
+  mul: string;             // "1물"~"14물" | "조금" | "무시"
+  isFishingPrime: boolean; // 보름·그믐 ±2일 (사리 큰물)
+  badgeColor: string;
+  system: TideSystem;
 }
+
+export type TideSystem = '7물때식' | '8물때식';
+type Tier = 'sari' | 'shoulder' | 'jogeum' | 'mushi' | 'normal';
 
 const lunarFmt = new Intl.DateTimeFormat('en-u-ca-chinese', { day: 'numeric' });
 
@@ -19,25 +22,51 @@ export function lunarDay(date: Date): number {
   return dayPart ? parseInt(dayPart.value, 10) : 0;
 }
 
-// 14물때식 (서해 표준 기준 테이블) — 음력 1일을 7물로 시작
-type Tier = 'sari' | 'shoulder' | 'jogeum' | 'mushi' | 'normal';
+// 지역별 사용 시스템 — 바다타임 기준
+//  · 서해: 7물때식 (음 1=7물, 음 9=무시)
+//  · 남해/동해/제주: 8물때식 (음 1=8물, 음 9=1물 — 무시 없음)
+export const REGION_SYSTEM: Record<Region, TideSystem> = {
+  '서해': '7물때식',
+  '남해': '8물때식',
+  '제주': '8물때식',
+  '동해': '8물때식', // 조차 작아 의미 약함, 형식상 8물때식 분류
+};
 
-const MUL_TABLE: ReadonlyArray<{ mul: string; tier: Tier }> = [
-  { mul: '7물',  tier: 'sari' },     // 음 1, 16
-  { mul: '8물',  tier: 'sari' },     // 음 2, 17  ← 한사리(정점)
-  { mul: '9물',  tier: 'shoulder' }, // 음 3, 18
-  { mul: '10물', tier: 'normal' },   // 음 4, 19
-  { mul: '11물', tier: 'normal' },   // 음 5, 20
-  { mul: '12물', tier: 'normal' },   // 음 6, 21
-  { mul: '13물', tier: 'normal' },   // 음 7, 22
-  { mul: '조금', tier: 'jogeum' },   // 음 8, 23
-  { mul: '무시', tier: 'mushi' },    // 음 9, 24
-  { mul: '1물',  tier: 'normal' },   // 음 10, 25
-  { mul: '2물',  tier: 'normal' },   // 음 11, 26
-  { mul: '3물',  tier: 'normal' },   // 음 12, 27
-  { mul: '4물',  tier: 'shoulder' }, // 음 13, 28
-  { mul: '5물',  tier: 'shoulder' }, // 음 14, 29
-  { mul: '6물',  tier: 'sari' },     // 음 15, 30
+// 인덱스 0=음1, 1=음2, …, 14=음15 (그리고 음 16~30 동일 반복)
+const TABLE_7: ReadonlyArray<{ mul: string; tier: Tier }> = [
+  { mul: '7물',  tier: 'sari' },     // 0  음 1, 16
+  { mul: '8물',  tier: 'sari' },     // 1  음 2, 17
+  { mul: '9물',  tier: 'shoulder' }, // 2  음 3, 18
+  { mul: '10물', tier: 'normal' },   // 3
+  { mul: '11물', tier: 'normal' },   // 4
+  { mul: '12물', tier: 'normal' },   // 5
+  { mul: '13물', tier: 'normal' },   // 6
+  { mul: '조금', tier: 'jogeum' },   // 7  음 8, 23
+  { mul: '무시', tier: 'mushi' },    // 8  음 9, 24
+  { mul: '1물',  tier: 'normal' },   // 9
+  { mul: '2물',  tier: 'normal' },   // 10
+  { mul: '3물',  tier: 'normal' },   // 11
+  { mul: '4물',  tier: 'shoulder' }, // 12
+  { mul: '5물',  tier: 'shoulder' }, // 13
+  { mul: '6물',  tier: 'sari' },     // 14 음 15, 30 (보름·그믐)
+];
+
+const TABLE_8: ReadonlyArray<{ mul: string; tier: Tier }> = [
+  { mul: '8물',  tier: 'sari' },     // 0  음 1, 16
+  { mul: '9물',  tier: 'sari' },     // 1  음 2, 17
+  { mul: '10물', tier: 'shoulder' }, // 2
+  { mul: '11물', tier: 'normal' },   // 3
+  { mul: '12물', tier: 'normal' },   // 4
+  { mul: '13물', tier: 'normal' },   // 5
+  { mul: '14물', tier: 'normal' },   // 6
+  { mul: '조금', tier: 'jogeum' },   // 7  음 8, 23
+  { mul: '1물',  tier: 'normal' },   // 8  음 9, 24 (무시 없음)
+  { mul: '2물',  tier: 'normal' },   // 9
+  { mul: '3물',  tier: 'normal' },   // 10
+  { mul: '4물',  tier: 'normal' },   // 11
+  { mul: '5물',  tier: 'shoulder' }, // 12
+  { mul: '6물',  tier: 'shoulder' }, // 13
+  { mul: '7물',  tier: 'sari' },     // 14 음 15, 30 (보름·그믐)
 ];
 
 const TIER_COLOR: Record<Tier, string> = {
@@ -48,29 +77,20 @@ const TIER_COLOR: Record<Tier, string> = {
   normal:   '#9E9E9E',
 };
 
-// 지역별 시프트 (음력일 기준 days)
-// 남해/제주는 서해보다 같은 음력일에 1단계 빠른(시프트 +1) 물때 표기
-//  (동일 mul 라벨이 서해보다 1일 늦게 등장)
-const REGION_SHIFT: Record<Region, number> = {
-  '서해': 0,
-  '남해': 1,
-  '제주': 1,
-  '동해': 0, // 조차 작음 — 형식상 서해 표준 적용
-};
-
 export function tideClass(lunarD: number, region: Region = '서해'): LunarInfo {
+  const system = REGION_SYSTEM[region];
   if (!lunarD) {
-    return { day: 0, mul: '', isFishingPrime: false, badgeColor: '', region };
+    return { day: 0, mul: '', isFishingPrime: false, badgeColor: '', system };
   }
-  const shift = REGION_SHIFT[region] ?? 0;
-  const idx = ((lunarD - 1 - shift) % 15 + 15) % 15;
-  const m = MUL_TABLE[idx];
+  const idx = (lunarD - 1) % 15;
+  const table = system === '7물때식' ? TABLE_7 : TABLE_8;
+  const m = table[idx];
   return {
     day: lunarD,
     mul: m.mul,
     isFishingPrime: m.tier === 'sari',
     badgeColor: TIER_COLOR[m.tier],
-    region,
+    system,
   };
 }
 

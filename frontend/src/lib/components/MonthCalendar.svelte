@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import type { Station, TideResponse, TideEvent, Conditions } from '$lib/api';
-  import { tideClass, lunarDay } from '$lib/lunar';
+  import { tideClass, lunarDay, REGION_SYSTEM } from '$lib/lunar';
 
   export let station: Station;
   export let selectedDate: string; // YYYYMMDD — 시작 월 결정
@@ -214,17 +214,21 @@
   </div>
 
   <footer class="legend">
-    <span><i style="background:#E53935"></i>사리(6·7·8물)</span>
-    <span><i style="background:#FB8C00"></i>어깨(3·4·5·9물)</span>
-    <span><i style="background:#1E88E5"></i>조금</span>
-    <span><i style="background:#64B5F6"></i>무시</span>
+    {#if REGION_SYSTEM[station.region] === '7물때식'}
+      <span><i style="background:#E53935"></i>사리(6·7·8물)</span>
+      <span><i style="background:#FB8C00"></i>어깨(4·5·9물)</span>
+      <span><i style="background:#1E88E5"></i>조금</span>
+      <span><i style="background:#64B5F6"></i>무시</span>
+    {:else}
+      <span><i style="background:#E53935"></i>사리(7·8·9물)</span>
+      <span><i style="background:#FB8C00"></i>어깨(5·6·10물)</span>
+      <span><i style="background:#1E88E5"></i>조금</span>
+    {/if}
     <span class="region-note">
-      {#if station.region === '남해' || station.region === '제주'}
-        ※ {station.region} 표기 (서해 -1일)
-      {:else if station.region === '동해'}
-        ※ 동해 조차 작음 — 참고용
+      {#if station.region === '동해'}
+        ※ 8물때식 (동해 조차 작음)
       {:else}
-        ※ 서해 14물때식
+        ※ {REGION_SYSTEM[station.region]} ({station.region})
       {/if}
     </span>
   </footer>
