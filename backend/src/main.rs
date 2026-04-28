@@ -122,6 +122,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/tide/:code", get(tide_today))
         .route("/api/tide/:code/:date", get(tide_for_date))
         .route("/api/conditions/:code", get(conditions_for_station))
+        .route("/api/conditions/:code/:date", get(conditions_for_date))
         .with_state(state)
         .layer(cors)
         .layer(TraceLayer::new_for_http());
@@ -172,7 +173,19 @@ async fn conditions_for_station(
 ) -> Result<Json<conditions::Conditions>, ApiError> {
     let station = stations::find(&code)
         .ok_or_else(|| ApiError::bad_request(format!("unknown station code: {code}")))?;
-    conditions::fetch(&state.http, station.lat, station.lon)
+    conditions::fetch(&state.http, station.lat, station.lon, None)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::upstream(format!("Open-Meteo failed: {e}")))
+}
+
+async fn conditions_for_date(
+    State(state): State<Arc<AppState>>,
+    Path((code, date)): Path<(String, String)>,
+) -> Result<Json<conditions::Conditions>, ApiError> {
+    let station = stations::find(&code)
+        .ok_or_else(|| ApiError::bad_request(format!("unknown station code: {code}")))?;
+    conditions::fetch(&state.http, station.lat, station.lon, Some(&date))
         .await
         .map(Json)
         .map_err(|e| ApiError::upstream(format!("Open-Meteo failed: {e}")))

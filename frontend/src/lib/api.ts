@@ -38,6 +38,7 @@ export interface Conditions {
   wave_period: number | null;
   wave_direction: number | null;
   time: string;
+  source: 'live' | 'forecast' | 'archive';
 }
 
 const BASE = '/api';
@@ -58,8 +59,9 @@ export async function fetchTide(code: string, date?: string): Promise<TideRespon
   return res.json();
 }
 
-export async function fetchConditions(code: string): Promise<Conditions> {
-  const res = await fetch(`${BASE}/conditions/${code}`);
+export async function fetchConditions(code: string, date?: string): Promise<Conditions> {
+  const url = date ? `${BASE}/conditions/${code}/${date}` : `${BASE}/conditions/${code}`;
+  const res = await fetch(url);
   if (!res.ok) {
     const msg = await res.text();
     throw new Error(`conditions: ${res.status} ${msg}`);

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
-  import type { Station, TideResponse, TideEvent } from '$lib/api';
+  import type { Station, TideResponse, TideEvent, Conditions } from '$lib/api';
   import { tideClass, lunarDay } from '$lib/lunar';
 
   export let station: Station;
   export let selectedDate: string; // YYYYMMDD — 시작 월 결정
   export let ensureTide: (code: string, ymd: string) => Promise<TideResponse>;
+  export let ensureConditions: (code: string, ymd: string) => Promise<Conditions>;
 
   const dispatch = createEventDispatcher<{ close: undefined; pick: string }>();
 
@@ -14,6 +15,7 @@
     date: Date;
     inMonth: boolean;
     tide: TideResponse | null;
+    conditions: Conditions | null;
     loading: boolean;
     error: boolean;
   };
@@ -51,6 +53,7 @@
         date: d,
         inMonth: dayNum >= 1 && dayNum <= daysInMonth,
         tide: null,
+        conditions: null,
         loading: dayNum >= 1 && dayNum <= daysInMonth,
         error: false
       });
@@ -73,6 +76,14 @@
           cells[idx] = { ...cells[idx], loading: false, error: true };
           cells = cells;
         });
+      // 날씨 이모지 — 실패해도 셀은 정상 표시
+      ensureConditions(station.code, c.ymd)
+        .then((cond) => {
+          if (token !== loadToken) return;
+          cells[idx] = { ...cells[idx], conditions: cond };
+          cells = cells;
+        })
+        .catch(() => {/* silent */});
     });
   }
 
@@ -181,9 +192,14 @@
           {/if}
         </div>
         {#if cell.inMonth}
-          {#if lun.label}
-            <span class="phase-badge">{lun.label}</span>
-          {/if}
+          <div class="phase-row">
+            {#if lun.label}
+              <span class="phase-badge">{lun.label}</span>
+            {/if}
+            {#if cell.conditions?.weather_emoji}
+              <span class="wx-emoji" title={cell.conditions.weather_label}>{cell.conditions.weather_emoji}</span>
+            {/if}
+          </div>
           {#if cell.loading}
             <span class="placeholder">…</span>
           {:else if cell.error}
@@ -360,6 +376,12 @@
   .cell.sat .day { color: #1E88E5; }
   .lunar { font-size: 9px; color: #999; }
 
+  .phase-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
   .phase-badge {
     font-size: 10px;
     font-weight: 600;
@@ -368,6 +390,10 @@
     padding: 1px 6px;
     border-radius: 8px;
     line-height: 1.4;
+  }
+  .wx-emoji {
+    font-size: 14px;
+    line-height: 1;
   }
   .low-time {
     font-family: ui-monospace, monospace;

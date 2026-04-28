@@ -18,6 +18,10 @@
   // 진행 중인 페치 (중복 요청 방지)
   let tideInflight: Record<string, Promise<TideResponse>> = {};
 
+  // 날짜별 날씨/수온 캐시 — key: `${code}:${ymd}`
+  let conditionsCache: Record<string, Conditions> = {};
+  let conditionsInflight: Record<string, Promise<Conditions>> = {};
+
   // 처음 선택 시 — 양쪽으로 적당히
   const WINDOW_NEUTRAL = [-3, -2, -1, 1, 2, 3, 4, 5, 6, 7];
   // ›로 미래 이동 중 — 앞으로 길게
@@ -60,6 +64,24 @@
     return p;
   }
 
+  function ensureConditions(code: string, ymd: string): Promise<Conditions> {
+    const key = `${code}:${ymd}`;
+    if (conditionsCache[key]) return Promise.resolve(conditionsCache[key]);
+    if (conditionsInflight[key]) return conditionsInflight[key];
+    const p = fetchConditions(code, ymd)
+      .then((c) => {
+        if (selected?.code === code) {
+          conditionsCache = { ...conditionsCache, [key]: c };
+        }
+        return c;
+      })
+      .finally(() => {
+        delete conditionsInflight[key];
+      });
+    conditionsInflight[key] = p;
+    return p;
+  }
+
   // direction: -1=과거, +1=미래, 0=양방향
   function prefetchAround(code: string, centerYmd: string, direction = 0) {
     const offsets =
@@ -70,7 +92,9 @@
     for (const offset of offsets) {
       const d = new Date(center);
       d.setDate(d.getDate() + offset);
-      ensureTide(code, dateToYmd(d)).catch(() => {/* silent */});
+      const ymd = dateToYmd(d);
+      ensureTide(code, ymd).catch(() => {/* silent */});
+      ensureConditions(code, ymd).catch(() => {/* silent */});
     }
   }
 
@@ -98,27 +122,23 @@
     conditions = null;
     tideError = null;
     loadingTide = true;
-    tideCache = {};  // 관측소 바뀌면 캐시 초기화
+    tideCache = {};
+    conditionsCache = {};
 
     const code = selected.code;
     try {
       const [t, c] = await Promise.allSettled([
-        fetchTide(code, selectedDate),
-        fetchConditions(code)
+        ensureTide(code, selectedDate),
+        ensureConditions(code, selectedDate)
       ]);
-      if (selected?.code !== code) return; // 빠른 재선택 보호
-      if (t.status === 'fulfilled') {
-        tide = t.value;
-        tideCache = { ...tideCache, [`${code}:${selectedDate}`]: t.value };
-      } else {
-        tideError = t.reason?.message ?? String(t.reason);
-      }
+      if (selected?.code !== code) return;
+      if (t.status === 'fulfilled') tide = t.value;
+      else tideError = t.reason?.message ?? String(t.reason);
       if (c.status === 'fulfilled') conditions = c.value;
     } finally {
       loadingTide = false;
     }
 
-    // 선택 후 주변 날짜 백그라운드 프리페치
     prefetchAround(code, selectedDate);
   }
 
@@ -133,24 +153,29 @@
     const direction = selectedDate > oldDate ? 1 : selectedDate < oldDate ? -1 : 0;
     const key = `${code}:${selectedDate}`;
 
-    // 캐시 히트 — 즉시 표시, 로딩 없음
-    if (tideCache[key]) {
+    // 양쪽 캐시 히트면 즉시 표시
+    if (tideCache[key] && conditionsCache[key]) {
       tide = tideCache[key];
+      conditions = conditionsCache[key];
       tideError = null;
       prefetchAround(code, selectedDate, direction);
       return;
     }
 
-    // 캐시 미스(혹은 prefetch 진행 중) — 진행 중인 promise를 기다리거나 새로 페치
-    tide = null;
+    // 일부 또는 전부 캐시 미스 — 인플라이트 promise 기다리거나 새로 페치
+    tide = tideCache[key] ?? null;
+    conditions = conditionsCache[key] ?? null;
     tideError = null;
-    loadingTide = true;
+    loadingTide = !tide; // tide가 이미 있으면 로딩 표시 생략
     try {
-      const t = await ensureTide(code, selectedDate);
+      const [t, c] = await Promise.allSettled([
+        ensureTide(code, selectedDate),
+        ensureConditions(code, selectedDate)
+      ]);
       if (selected?.code !== code || selectedDate !== e.detail) return;
-      tide = t;
-    } catch (err: any) {
-      tideError = err.message ?? String(err);
+      if (t.status === 'fulfilled') tide = t.value;
+      else tideError = t.reason?.message ?? String(t.reason);
+      if (c.status === 'fulfilled') conditions = c.value;
     } finally {
       loadingTide = false;
     }
@@ -197,6 +222,7 @@
       station={selected}
       {selectedDate}
       {ensureTide}
+      {ensureConditions}
       on:close={closeMonth}
       on:pick={pickMonthDate}
     />

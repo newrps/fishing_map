@@ -90,10 +90,14 @@
   {:else if error}
     <div class="state error">⚠️ {error}</div>
   {:else}
-    <!-- 현재 날씨/수온 (실시간 - 항상 표시) -->
+    <!-- 날씨/수온 — 날짜에 맞춘 데이터 -->
     {#if conditions}
       <div class="now">
-        {#if !isToday(selectedDate)}
+        {#if conditions.source === 'forecast'}
+          <div class="live-tag forecast">📅 이 날짜의 예보</div>
+        {:else if conditions.source === 'archive'}
+          <div class="live-tag archive">📊 이 날짜의 기록</div>
+        {:else if !isToday(selectedDate)}
           <div class="live-tag">🟢 현재 (실시간)</div>
         {/if}
         <div class="now-cell">
@@ -249,6 +253,8 @@
     padding: 3px 8px;
     border-radius: 6px;
   }
+  .live-tag.forecast { color: #1565C0; background: rgba(227, 242, 253, 0.85); }
+  .live-tag.archive { color: #6A1B9A; background: rgba(243, 229, 245, 0.85); }
   .now-cell .emo { font-size: 22px; line-height: 1; }
   .big { font-size: 17px; font-weight: 600; color: #003D5C; line-height: 1; }
   .lbl { font-size: 10px; color: #666; margin-top: 2px; }
