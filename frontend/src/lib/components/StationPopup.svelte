@@ -61,7 +61,6 @@
       <h3>{station.name}</h3>
       <span class="region">{station.region}</span>
     </div>
-    <small class="code">{station.code}</small>
   </header>
 
   <!-- 날짜 네비게이션 -->
@@ -169,12 +168,6 @@
     font-size: 11px;
     font-weight: 500;
   }
-  .code {
-    color: #999;
-    font-size: 10px;
-    font-family: ui-monospace, monospace;
-  }
-
   .date-nav {
     display: grid;
     grid-template-columns: 36px 1fr 36px;
