@@ -200,7 +200,7 @@
     leafletPopup = L.popup({
       closeButton: true,
       autoClose: false,
-      closeOnClick: false,
+      closeOnClick: true,
       maxWidth: 360,
       minWidth: 320,
       className: 'station-popup',
@@ -240,5 +240,35 @@
   }
   :global(.station-popup .leaflet-popup-tip) {
     box-shadow: 0 6px 24px rgba(0, 61, 92, 0.2);
+  }
+
+  /* X 닫기 버튼 — 잘 보이게 */
+  :global(.station-popup .leaflet-popup-close-button) {
+    width: 30px !important;
+    height: 30px !important;
+    top: 8px !important;
+    right: 8px !important;
+    background: rgba(0, 61, 92, 0.92) !important;
+    color: #fff !important;
+    border-radius: 50% !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    line-height: 28px !important;
+    text-align: center !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+    transition: background 0.15s, transform 0.15s;
+    padding: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  :global(.station-popup .leaflet-popup-close-button:hover) {
+    background: #d32f2f !important;
+    color: #fff !important;
+    transform: scale(1.08);
+  }
+  :global(.station-popup .leaflet-popup-close-button:focus-visible) {
+    outline: 2px solid #FFB800;
+    outline-offset: 2px;
   }
 </style>
