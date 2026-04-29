@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://cnm2.zam.kr/sitemap.xml
